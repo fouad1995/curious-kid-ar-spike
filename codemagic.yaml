@@ -1,0 +1,64 @@
+workflows:
+  ios-unsigned:
+    name: iOS Unsigned Build
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    environment:
+      unity: 6000.5.3f1
+      vars:
+        UNITY_IOS_EXPORT_PATH: ios_build
+      groups:
+        - unity_credentials
+    scripts:
+      - name: Activate Unity license
+        script: |
+          echo "$UNITY_LICENSE" | tr -d '\r' > /tmp/unity.ulf
+          $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
+            -batchmode \
+            -manualLicenseFile /tmp/unity.ulf \
+            -logFile /dev/stdout; true
+
+      - name: Build Unity iOS project
+        script: |
+          $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
+            -batchmode \
+            -quit \
+            -logFile /dev/stdout \
+            -projectPath . \
+            -buildTarget iOS \
+            -executeMethod BuildScript.BuildiOS \
+            -outputPath "$UNITY_IOS_EXPORT_PATH"
+
+      - name: Build Xcode project (no code signing)
+        script: |
+          cd "$UNITY_IOS_EXPORT_PATH"
+          xcodebuild \
+            -project Unity-iPhone.xcodeproj \
+            -scheme Unity-iPhone \
+            -configuration Debug \
+            -sdk iphoneos \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ALLOWED=NO \
+            PROVISIONING_PROFILE="" \
+            -derivedDataPath ./DerivedData
+
+      - name: Package unsigned IPA
+        script: |
+          APP=$(find "$UNITY_IOS_EXPORT_PATH/DerivedData/Build/Products" -name "*.app" | head -1)
+          mkdir -p Payload
+          cp -r "$APP" Payload/
+          zip -r ARSpike_unsigned.ipa Payload/
+          echo "IPA created: ARSpike_unsigned.ipa"
+
+    artifacts:
+      - ARSpike_unsigned.ipa
+      - $UNITY_IOS_EXPORT_PATH/**/*.log
+
+    publishing:
+      email:
+        recipients:
+          - fouadayman58@gmail.com
+        notify:
+          success: true
+          failure: true
