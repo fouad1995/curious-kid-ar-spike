@@ -12,11 +12,12 @@ workflows:
     scripts:
       - name: Activate Unity license
         script: |
-          echo "$UNITY_LICENSE" | tr -d '\r' > /tmp/unity.ulf
           $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
             -batchmode \
-            -manualLicenseFile /tmp/unity.ulf \
-            -logFile /dev/stdout; true
+            -quit \
+            -logFile /dev/stdout \
+            -username "$UNITY_EMAIL" \
+            -password "$UNITY_PASSWORD"; true
 
       - name: Build Unity iOS project
         script: |
