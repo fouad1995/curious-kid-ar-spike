@@ -1,18 +1,29 @@
 workflows:
   ios-unsigned:
     name: iOS Unsigned Build
-    max_build_duration: 60
+    max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
-      unity: 6000.5.3f1
       vars:
+        UNITY_VERSION: 6000.5.3f1
+        UNITY_CHANGESET: c2eb47b3a2a9
         UNITY_IOS_EXPORT_PATH: ios_build
       groups:
         - unity_credentials
     scripts:
+      - name: Install Unity
+        script: |
+          /Applications/Unity\ Hub.app/Contents/MacOS/Unity\ Hub -- \
+            --headless install \
+            --version $UNITY_VERSION \
+            --changeset $UNITY_CHANGESET \
+            -m ios
+          export UNITY_HOME="/Applications/Unity/Hub/Editor/$UNITY_VERSION"
+          echo "UNITY_HOME=$UNITY_HOME" >> $CM_ENV
+
       - name: Activate Unity license
         script: |
-          $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
+          "$UNITY_HOME/Unity.app/Contents/MacOS/Unity" \
             -batchmode \
             -quit \
             -logFile /dev/stdout \
@@ -21,7 +32,7 @@ workflows:
 
       - name: Build Unity iOS project
         script: |
-          $UNITY_HOME/Unity.app/Contents/MacOS/Unity \
+          "$UNITY_HOME/Unity.app/Contents/MacOS/Unity" \
             -batchmode \
             -quit \
             -logFile /dev/stdout \
