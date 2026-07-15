@@ -1,4 +1,26 @@
 workflows:
+  # Run this ONCE to generate the Unity activation file.
+  # Download the .alf artifact, upload to https://license.unity3d.com/manual,
+  # download the .ulf, base64-encode it, and store as UNITY_LICENSE_CONTENT
+  # in the Codemagic environment group unity_credentials. Then use ios-unsigned.
+  get-activation-file:
+    name: Get Unity Activation File (run once)
+    max_build_duration: 10
+    instance_type: mac_mini_m1
+    environment:
+      unity: 6000.3.19f1
+    scripts:
+      - name: Generate activation file
+        script: |
+          echo "UNITY_HOME: $UNITY_HOME"
+          $UNITY_HOME/Contents/MacOS/Unity \
+            -batchmode \
+            -createManualActivationFile \
+            -logFile -; true
+          ls *.alf && echo "ALF file generated OK" || echo "No .alf file found"
+    artifacts:
+      - "*.alf"
+
   ios-unsigned:
     name: iOS Unsigned Build
     max_build_duration: 60
@@ -11,15 +33,11 @@ workflows:
       groups:
         - unity_credentials
     scripts:
-      - name: Check Unity path
-        script: |
-          echo "UNITY_HOME: $UNITY_HOME"
-          ls "$UNITY_HOME/Contents/MacOS/Unity" \
-            && echo "Unity binary: OK" \
-            || (echo "Unity binary: NOT FOUND at $UNITY_HOME" && exit 1)
-
       - name: Activate Unity license
         script: |
+          mkdir -p "/Library/Application Support/Unity"
+          echo "$UNITY_LICENSE_CONTENT" | base64 --decode \
+            > "/Library/Application Support/Unity/Unity_lic.ulf"
           $UNITY_HOME/Contents/MacOS/Unity -batchmode -quit -logFile - \
             -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" || true
 
