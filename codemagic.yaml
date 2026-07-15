@@ -1,59 +1,46 @@
 workflows:
   ios-unsigned:
     name: iOS Unsigned Build
-    max_build_duration: 120
+    max_build_duration: 60
     instance_type: mac_mini_m1
     environment:
+      unity: 6000.3.19f1
       vars:
-        UNITY_VERSION: 6000.5.3f1
-        UNITY_CHANGESET: c2eb47b3a2a9
+        UNITY_HOME: /Applications/Unity/Hub/Editor/6000.3.19f1
         UNITY_IOS_EXPORT_PATH: ios_build
       groups:
         - unity_credentials
     scripts:
-      - name: Install Unity
-        script: |
-          /Applications/Unity\ Hub.app/Contents/MacOS/Unity\ Hub -- \
-            --headless install \
-            --version $UNITY_VERSION \
-            --changeset $UNITY_CHANGESET \
-            -m ios
-          export UNITY_HOME="/Applications/Unity/Hub/Editor/$UNITY_VERSION"
-          echo "UNITY_HOME=$UNITY_HOME" >> $CM_ENV
-
       - name: Activate Unity license
         script: |
           "$UNITY_HOME/Unity.app/Contents/MacOS/Unity" \
-            -batchmode \
-            -quit \
-            -logFile /dev/stdout \
-            -username "$UNITY_EMAIL" \
-            -password "$UNITY_PASSWORD"; true
+            -batchmode -quit -logFile /dev/stdout \
+            -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"; true
 
       - name: Build Unity iOS project
         script: |
           "$UNITY_HOME/Unity.app/Contents/MacOS/Unity" \
-            -batchmode \
-            -quit \
-            -logFile /dev/stdout \
-            -projectPath . \
-            -buildTarget iOS \
+            -batchmode -quit -logFile /dev/stdout \
+            -projectPath . -buildTarget iOS \
             -executeMethod BuildScript.BuildiOS \
             -outputPath "$UNITY_IOS_EXPORT_PATH"
 
       - name: Build Xcode project (no code signing)
         script: |
           cd "$UNITY_IOS_EXPORT_PATH"
-          xcodebuild \
+          xcodebuild build \
             -project Unity-iPhone.xcodeproj \
             -scheme Unity-iPhone \
             -configuration Debug \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ./DerivedData \
             CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ALLOWED=NO \
             PROVISIONING_PROFILE="" \
-            -derivedDataPath ./DerivedData
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            ENABLE_BITCODE=NO
 
       - name: Package unsigned IPA
         script: |
@@ -61,11 +48,9 @@ workflows:
           mkdir -p Payload
           cp -r "$APP" Payload/
           zip -r ARSpike_unsigned.ipa Payload/
-          echo "IPA created: ARSpike_unsigned.ipa"
 
     artifacts:
       - ARSpike_unsigned.ipa
-      - $UNITY_IOS_EXPORT_PATH/**/*.log
 
     publishing:
       email:
