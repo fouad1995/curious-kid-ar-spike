@@ -6,42 +6,54 @@ workflows:
     environment:
       unity: 6000.3.19f1
       vars:
-        UNITY_BIN: /Applications/Unity/Hub/Editor/6000.3.19f1/Unity.app/Contents/MacOS/Unity
         UNITY_IOS_EXPORT_PATH: ios_build
+        XCODE_SCHEME: Unity-iPhone
       groups:
         - unity_credentials
     scripts:
-      - name: Check Unity installation
+      - name: Check Unity path
         script: |
-          echo "Checking Unity at: $UNITY_BIN"
-          ls "$UNITY_BIN" && echo "Unity found" || echo "Unity NOT found at expected path"
-          echo "Installed editors:"
-          ls /Applications/Unity/Hub/Editor/ || echo "No Unity Hub editors directory"
+          echo "UNITY_HOME: $UNITY_HOME"
+          ls "$UNITY_HOME/Contents/MacOS/Unity" \
+            && echo "Unity binary: OK" \
+            || (echo "Unity binary: NOT FOUND at $UNITY_HOME" && exit 1)
 
       - name: Activate Unity license
         script: |
-          "$UNITY_BIN" \
-            -batchmode -quit \
-            -logFile /tmp/unity-license.log \
+          $UNITY_HOME/Contents/MacOS/Unity -batchmode -quit -logFile - \
             -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" || true
-          cat /tmp/unity-license.log || true
 
       - name: Build Unity iOS project
         script: |
-          "$UNITY_BIN" \
-            -batchmode -quit \
-            -logFile /tmp/unity-build.log \
-            -projectPath . -buildTarget iOS \
+          $UNITY_HOME/Contents/MacOS/Unity -batchmode -quit -logFile - \
+            -projectPath . \
+            -buildTarget iOS \
             -executeMethod BuildScript.BuildiOS \
             -outputPath "$UNITY_IOS_EXPORT_PATH"
-          cat /tmp/unity-build.log
+
+      - name: Install CocoaPods dependencies
+        script: |
+          cd "$UNITY_IOS_EXPORT_PATH"
+          if [ -f "Podfile" ]; then
+            echo "Podfile found — running pod install"
+            pod install
+          else
+            echo "No Podfile — skipping"
+          fi
 
       - name: Build Xcode project (no code signing)
         script: |
           cd "$UNITY_IOS_EXPORT_PATH"
+          if [ -f "Unity-iPhone.xcworkspace/contents.xcworkspacedata" ]; then
+            BUILD_TARGET="-workspace Unity-iPhone.xcworkspace"
+            echo "Building with .xcworkspace (CocoaPods)"
+          else
+            BUILD_TARGET="-project Unity-iPhone.xcodeproj"
+            echo "Building with .xcodeproj"
+          fi
           xcodebuild build \
-            -project Unity-iPhone.xcodeproj \
-            -scheme Unity-iPhone \
+            $BUILD_TARGET \
+            -scheme "$XCODE_SCHEME" \
             -configuration Debug \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
@@ -56,9 +68,15 @@ workflows:
       - name: Package unsigned IPA
         script: |
           APP=$(find "$UNITY_IOS_EXPORT_PATH/DerivedData/Build/Products" -name "*.app" | head -1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: No .app bundle found in DerivedData"
+            exit 1
+          fi
+          echo "Packaging: $APP"
           mkdir -p Payload
           cp -r "$APP" Payload/
           zip -r ARSpike_unsigned.ipa Payload/
+          echo "IPA ready — $(du -sh ARSpike_unsigned.ipa | cut -f1)"
 
     artifacts:
       - ARSpike_unsigned.ipa
