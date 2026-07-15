@@ -1,0 +1,88 @@
+name: Build iOS Unsigned
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for iOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-iOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: |
+            Library-iOS-
+            Library-
+
+      - name: Build Unity iOS project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: iOS
+          unityVersion: 6000.3.19f1
+
+      - name: Install CocoaPods if needed
+        run: |
+          cd build/iOS
+          if [ -f "Podfile" ]; then
+            echo "Podfile found — running pod install"
+            pod install
+          else
+            echo "No Podfile — skipping"
+          fi
+
+      - name: Build Xcode project (no code signing)
+        run: |
+          cd build/iOS
+          if [ -f "Unity-iPhone.xcworkspace/contents.xcworkspacedata" ]; then
+            BUILD_TARGET="-workspace Unity-iPhone.xcworkspace"
+            echo "Building with .xcworkspace"
+          else
+            BUILD_TARGET="-project Unity-iPhone.xcodeproj"
+            echo "Building with .xcodeproj"
+          fi
+          xcodebuild build \
+            $BUILD_TARGET \
+            -scheme Unity-iPhone \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath ./DerivedData \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            PROVISIONING_PROFILE="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            ENABLE_BITCODE=NO
+
+      - name: Package unsigned IPA
+        run: |
+          APP=$(find build/iOS/DerivedData/Build/Products -name "*.app" | head -1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: No .app bundle found"
+            exit 1
+          fi
+          echo "Packaging: $APP"
+          mkdir -p Payload
+          cp -r "$APP" Payload/
+          zip -r ARSpike_unsigned.ipa Payload/
+          echo "IPA ready — $(du -sh ARSpike_unsigned.ipa | cut -f1)"
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARSpike_unsigned
+          path: ARSpike_unsigned.ipa
+          retention-days: 7
