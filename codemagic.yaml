@@ -6,23 +6,35 @@ workflows:
     environment:
       unity: 6000.3.19f1
       vars:
+        UNITY_BIN: /Applications/Unity/Hub/Editor/6000.3.19f1/Unity.app/Contents/MacOS/Unity
         UNITY_IOS_EXPORT_PATH: ios_build
       groups:
         - unity_credentials
     scripts:
+      - name: Check Unity installation
+        script: |
+          echo "Checking Unity at: $UNITY_BIN"
+          ls "$UNITY_BIN" && echo "Unity found" || echo "Unity NOT found at expected path"
+          echo "Installed editors:"
+          ls /Applications/Unity/Hub/Editor/ || echo "No Unity Hub editors directory"
+
       - name: Activate Unity license
         script: |
-          "$UNITY_HOME/Contents/MacOS/Unity" \
-            -batchmode -quit -logFile /dev/stdout \
-            -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"; true
+          "$UNITY_BIN" \
+            -batchmode -quit \
+            -logFile /tmp/unity-license.log \
+            -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD" || true
+          cat /tmp/unity-license.log || true
 
       - name: Build Unity iOS project
         script: |
-          "$UNITY_HOME/Contents/MacOS/Unity" \
-            -batchmode -quit -logFile /dev/stdout \
+          "$UNITY_BIN" \
+            -batchmode -quit \
+            -logFile /tmp/unity-build.log \
             -projectPath . -buildTarget iOS \
             -executeMethod BuildScript.BuildiOS \
             -outputPath "$UNITY_IOS_EXPORT_PATH"
+          cat /tmp/unity-build.log
 
       - name: Build Xcode project (no code signing)
         script: |
