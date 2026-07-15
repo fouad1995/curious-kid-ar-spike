@@ -6,20 +6,19 @@ workflows:
     environment:
       unity: 6000.3.19f1
       vars:
-        UNITY_HOME: /Applications/Unity/Hub/Editor/6000.3.19f1
         UNITY_IOS_EXPORT_PATH: ios_build
       groups:
         - unity_credentials
     scripts:
       - name: Activate Unity license
         script: |
-          "$UNITY_HOME/Unity.app/Contents/MacOS/Unity" \
+          "$UNITY_HOME/Contents/MacOS/Unity" \
             -batchmode -quit -logFile /dev/stdout \
             -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"; true
 
       - name: Build Unity iOS project
         script: |
-          "$UNITY_HOME/Unity.app/Contents/MacOS/Unity" \
+          "$UNITY_HOME/Contents/MacOS/Unity" \
             -batchmode -quit -logFile /dev/stdout \
             -projectPath . -buildTarget iOS \
             -executeMethod BuildScript.BuildiOS \
